@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d1729">
+<meta name="description" content="WordGrid: a polished, offline five-letter word-guessing game with a daily challenge and unlimited practice.">
+<title>WordGrid — Daily Word Challenge</title>
+<style>
+/* Design tokens */
+:root {
+  color-scheme: light;
+  --bg: #f4f6f8; --surface: #ffffff; --surface-2: #e9eef3;
+  --text: #142136; --muted: #53657b; --border: #cfdae4; --line: #dae2ea;
+  --correct: #187e65; --present: #986015; --absent: #64748b;
+  --on-status: #fff; --accent: #355ad6; --accent-light: #e7ecff;
+  --key: #dbe3eb; --key-text: #24354b; --tile-border: #b9c9d7;
+  --shadow: 0 22px 70px rgba(17, 36, 64, .07);
+  --tile: min(56px, calc((100vw - 58px) / 5), calc((100dvh - 260px) / 6));
+}
+@media(prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  color-scheme: dark;
+  --bg: #0d1729; --surface: #17243a; --surface-2: #22334d;
+  --text: #edf3fa; --muted: #aabbd0; --border: #3b4c64; --line: #2d4058;
+  --correct: #187b65; --present: #986015; --absent: #58677b;
+  --on-status: #fff; --accent: #8ca8ff; --accent-light: #293d6e;
+  --key: #32455e; --key-text: #f3f6fb; --tile-border: #60718a;
+  --shadow: 0 22px 70px rgba(0, 0, 0, .18);
+}}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0d1729; --surface: #17243a; --surface-2: #22334d;
+  --text: #edf3fa; --muted: #aabbd0; --border: #3b4c64; --line: #2d4058;
+  --correct: #187b65; --present: #986015; --absent: #58677b;
+  --on-status: #fff; --accent: #8ca8ff; --accent-light: #293d6e;
+  --key: #32455e; --key-text: #f3f6fb; --tile-border: #60718a;
+  --shadow: 0 22px 70px rgba(0, 0, 0, .18);
+}
+:root[data-colorblind="true"] { --correct: #99510a; --present: #1a5f9e; }
+* { box-sizing: border-box; }
+html { height: 100%; }
+body { margin: 0; min-height: 100%; font: 500 15px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+button, select { font: inherit; }
+button { cursor: pointer; }
+button:focus-visible, select:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+button:disabled { cursor: default; }
+.shell { min-height: 100dvh; display: flex; flex-direction: column; max-width: 760px; margin: auto; }
+.topbar { height: 72px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; padding: 0 24px; border-bottom: 1px solid var(--line); }
+.header-side { display: flex; gap: 7px; align-items: center; }
+.header-side.right { justify-content: flex-end; }
+.icon-btn { display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid transparent; background: none; border-radius: 11px; color: var(--muted); }
+.icon-btn:hover { background: var(--surface-2); color: var(--text); }
+.icon-btn svg { width: 20px; height: 20px; stroke: currentColor; stroke-width: 1.9; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.brand { display: flex; justify-content: center; align-items: center; gap: 10px; font-weight: 800; font-size: 24px; letter-spacing: -1.2px; user-select: none; white-space: nowrap; }
+.brand-mark { display: grid; place-items: center; height: 28px; width: 28px; border-radius: 7px; background: var(--correct); color: #fff; font-size: 17px; font-weight: 850; transform: rotate(-6deg); letter-spacing: 0; }
+.mode-switch { display: flex; gap: 3px; border: 1px solid var(--border); background: var(--surface-2); padding: 3px; border-radius: 999px; }
+.mode-switch button { border: none; background: transparent; color: var(--muted); padding: 5px 12px; font-size: 12px; font-weight: 750; border-radius: 999px; }
+.mode-switch button.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px #00000010; }
+.content { flex: 1; width: 100%; display: flex; flex-direction: column; align-items: center; padding: 16px 12px 12px; }
+.eyebrow { margin: 0; color: var(--muted); font-size: 11px; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
+.subheading { margin: 4px 0 11px; min-height: 18px; text-align: center; color: var(--muted); font-size: 12px; }
+.subheading strong { color: var(--text); font-weight: 750; }
+.play-area { width: 100%; display: flex; flex-direction: column; align-items: center; flex: 1; justify-content: center; min-height: 0; gap: clamp(10px, 3.5dvh, 28px); }
+.board { display: grid; grid-template-rows: repeat(6, var(--tile)); gap: 6px; align-content: center; justify-content: center; user-select: none; }
+.board-row { display: grid; grid-template-columns: repeat(5, var(--tile)); gap: 6px; }
+.tile { display: grid; place-items: center; width: var(--tile); height: var(--tile); border-radius: 7px; border: 2px solid var(--tile-border); font-size: clamp(20px, 4.5vw, 28px); font-weight: 800; line-height: 1; position: relative; background: var(--surface); text-transform: uppercase; backface-visibility: hidden; }
+.tile.typed { border-color: var(--muted); }
+.tile.correct, .tile.present, .tile.absent { color: var(--on-status); border-color: transparent; }
+.tile.correct { background: var(--correct); }
+.tile.present { background: var(--present); }
+.tile.absent { background: var(--absent); }
+.tile .sym { position: absolute; right: 3px; bottom: 1px; font-size: 11px; font-weight: 900; }
+.tile.pop { animation: pop .13s ease-out; }
+.tile.flip { animation: flip .55s ease-in-out both; }
+.board-row.shake { animation: shake .45s linear; }
+.board-row.bounce .tile { animation: bounce .56s ease-in-out; }
+.board-row.bounce .tile:nth-child(2) { animation-delay: .08s; }
+.board-row.bounce .tile:nth-child(3) { animation-delay: .16s; }
+.board-row.bounce .tile:nth-child(4) { animation-delay: .24s; }
+.board-row.bounce .tile:nth-child(5) { animation-delay: .32s; }
+.keyboard { width: min(540px, 100%); display: flex; flex-direction: column; align-items: center; gap: 7px; padding-bottom: 6px; user-select: none; touch-action: manipulation; }
+.key-row { width: 100%; display: flex; justify-content: center; gap: 5px; }
+.key { min-width: 0; flex: 1; max-width: 49px; height: clamp(42px, 7.2dvh, 51px); border-radius: 7px; border: none; background: var(--key); color: var(--key-text); font-weight: 770; font-size: 13px; transition: background .16s ease; }
+.key.wide { flex: 1.55; max-width: 77px; font-size: 11px; }
+.key:active { transform: translateY(2px); }
+.key.correct, .key.present, .key.absent { color: var(--on-status); }
+.key.correct { background: var(--correct); }
+.key.present { background: var(--present); }
+.key.absent { background: var(--absent); }
+.key .key-symbol { margin-left: 2px; font-size: 10px; }
+.bottom-bar { display: flex; justify-content: center; width: 100%; min-height: 32px; align-items: center; }
+.pill-btn { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 999px; padding: 7px 16px; font-size: 12px; font-weight: 700; }
+.pill-btn:hover { background: var(--surface-2); }
+.next-note { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.footer { width: 100%; padding: 7px 12px 16px; text-align: center; font-size: 10px; color: var(--muted); }
+.toast { position: fixed; top: 78px; left: 50%; transform: translate(-50%, -8px); color: #fff; background: #20324a; border: 1px solid #465977; padding: 10px 16px; border-radius: 11px; box-shadow: 0 15px 38px #0005; text-align: center; font-weight: 700; z-index: 90; max-width: calc(100vw - 24px); opacity: 0; visibility: hidden; transition: opacity .18s, transform .18s, visibility .18s; white-space: pre-line; }
+.toast.show { visibility: visible; opacity: 1; transform: translate(-50%, 0); }
+.dialog { width: min(440px, calc(100vw - 26px)); max-height: min(720px, calc(100dvh - 32px)); overflow-y: auto; border: 1px solid var(--border); border-radius: 20px; padding: 0; color: var(--text); background: var(--surface); box-shadow: 0 30px 90px #0005; }
+.dialog::backdrop { background: #07101caa; backdrop-filter: blur(4px); }
+.dialog-inner { padding: 26px; }
+.dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-bottom: 14px; }
+.dialog h2 { font-size: 24px; letter-spacing: -.7px; margin: 0; }
+.dialog h3 { margin: 24px 0 10px; font-size: 14px; }
+.dialog p { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.dialog .close { width: 33px; height: 33px; flex: none; }
+.example { margin: 14px 0; display: flex; gap: 9px; align-items: center; }
+.example-tiles { display: flex; gap: 3px; }
+.example-tiles span { display: grid; place-items: center; font-size: 15px; font-weight: 800; height: 31px; width: 31px; border: 1px solid var(--tile-border); border-radius: 4px; }
+.example-tiles span.correct { background: var(--correct); color: #fff; border-color: transparent; }
+.example-tiles span.present { background: var(--present); color: #fff; border-color: transparent; }
+.example-tiles span.absent { background: var(--absent); color: #fff; border-color: transparent; }
+.example-copy { font-size: 12px; color: var(--muted); }
+.setting { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.setting:last-child { border-bottom: 0; }
+.setting-copy strong { display: block; font-size: 14px; }
+.setting-copy span { display: block; font-size: 11px; line-height: 1.4; color: var(--muted); margin-top: 3px; }
+.setting input[type="checkbox"] { width: 19px; height: 19px; accent-color: var(--accent); cursor: pointer; flex: none; }
+.setting select { max-width: 130px; padding: 9px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); }
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+.stats-cell { padding: 10px 4px; text-align: center; background: var(--surface-2); border-radius: 11px; }
+.stats-num { font-size: 25px; font-weight: 800; }
+.stats-caption { font-size: 10px; color: var(--muted); }
+.dist-row { display: flex; align-items: center; gap: 9px; margin: 7px 0; font-size: 13px; }
+.dist-n { width: 12px; text-align: right; }
+.dist-bar { display: flex; align-items: center; min-width: 27px; height: 24px; border-radius: 4px; background: var(--absent); color: white; padding: 0 7px; font-size: 12px; font-weight: 800; justify-content: flex-end; transition: width .2s ease; }
+.dist-bar.highlight { background: var(--correct); }
+.share-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; border: 0; border-radius: 11px; padding: 12px; margin-top: 17px; color: #fff; background: #355ad6; font-weight: 800; }
+.share-btn:disabled { opacity: .5; }
+.result-note { background: var(--surface-2); color: var(--muted); padding: 10px 14px; border-radius: 10px; font-size: 12px; text-align: center; margin-top: 15px; }
+.sr-only { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0,0,0,0) !important; white-space: nowrap !important; border: 0 !important; }
+@keyframes pop { 0% { transform: scale(.86); } 100% { transform: scale(1); } }
+@keyframes flip { 0%,100% { transform: rotateX(0); } 49.9% { transform: rotateX(-90deg); } 50.1% { transform: rotateX(-90deg); } }
+@keyframes shake { 0%,100% { transform: translateX(0); } 20%,60% { transform: translateX(-5px); } 40%,80% { transform: translateX(5px); } }
+@keyframes bounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+@media (max-width: 440px) {
+ .topbar { height: 59px; padding: 0 11px; gap: 3px; }
+ .brand { font-size: 19px; gap: 5px; letter-spacing: -.8px; }
+ .brand-mark { width: 23px; height: 23px; font-size: 14px; }
+ .header-side { gap: 0; }
+ .icon-btn { width: 30px; height: 35px; }
+ .icon-btn svg { width: 18px; height: 18px; }
+ .mode-switch button { font-size: 10px; padding: 5px 7px; }
+ .content { padding: 8px 8px 4px; }
+ .subheading { margin: 3px 0 7px; }
+ .play-area { gap: clamp(8px, 2dvh, 16px); }
+ .board, .board-row { gap: 5px; }
+ .key-row { gap: 3px; }
+ .key { font-size: 12px; }
+ .key.wide { font-size: 10px; }
+ .footer { padding: 3px 8px 9px; }
+}
+@media (max-height: 650px) {
+ :root { --tile: min(48px, calc((100vw - 58px) / 5), calc((100dvh - 280px) / 6)); }
+ .content { padding-top: 5px; padding-bottom: 3px; }
+ .subheading { margin: 2px 0 4px; }
+ .play-area { gap: 8px; }
+ .key { height: 42px; }
+ .footer { padding-top: 0; padding-bottom: 7px; }
+}
+@media (prefers-reduced-motion: reduce) {
+ *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}
+:root[data-reduced="true"] *, :root[data-reduced="true"] *::before, :root[data-reduced="true"] *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="header-side">
+      <button type="button" class="icon-btn" id="helpButton" aria-label="How to play" title="How to play">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9a2.5 2.5 0 0 1 4.8 1c0 1.8-2.4 2.1-2.4 3.6"/><path d="M12 17.5h.01"/></svg>
+      </button>
+      <div class="mode-switch" role="group" aria-label="Game mode">
+        <button type="button" id="dailyButton" class="active" aria-pressed="true">Daily</button>
+        <button type="button" id="practiceButton" aria-pressed="false">Practice</button>
+      </div>
+    </div>
+    <div class="brand" aria-label="WordGrid"><span class="brand-mark" aria-hidden="true">W</span><span>WordGrid</span></div>
+    <div class="header-side right">
+      <button type="button" class="icon-btn" id="statsButton" aria-label="Statistics" title="Statistics">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V11m5 9V5m5 15v-7m5 7V8"/></svg>
+      </button>
+      <button type="button" class="icon-btn" id="settingsButton" aria-label="Settings" title="Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06-2 2-.07-.06A1.65 1.65 0 0 0 16 18.5a1.65 1.65 0 0 0-1 .9V20H9v-.6a1.65 1.65 0 0 0-1-.9 1.65 1.65 0 0 0-1.73.32l-.06.06-2-2 .06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.9-1H3v-4h.7a1.65 1.65 0 0 0 .9-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06 2-2 .06.06A1.65 1.65 0 0 0 8 5.5a1.65 1.65 0 0 0 1-.9V4h6v.6a1.65 1.65 0 0 0 1 .9 1.65 1.65 0 0 0 1.73-.32l.06-.06 2 2-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 .9 1h.7v4h-.7a1.65 1.65 0 0 0-.9 1Z"/></svg>
+      </button>
+    </div>
+  </header>
+  <main class="content">
+    <p class="eyebrow" id="modeHeading">Today's challenge</p>
+    <p class="subheading" id="subheading">Six guesses. One hidden word.</p>
+    <div class="play-area">
+      <div id="board" class="board" role="grid" aria-label="Word guessing board, six rows and five columns"></div>
+      <div id="keyboard" class="keyboard" aria-label="On-screen keyboard"></div>
+    </div>
+    <div class="bottom-bar" id="bottomBar"></div>
+  </main>
+  <footer class="footer">A little word puzzle for your day · Designed for offline play</footer>
+</div>
+<div id="toast" class="toast" role="status" aria-hidden="true"></div>
+<div id="announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+<dialog id="helpDialog" class="dialog" aria-labelledby="helpTitle">
+  <div class="dialog-inner">
+    <div class="dialog-head"><h2 id="helpTitle">How to play</h2><button type="button" class="icon-btn close" data-close aria-label="Close help">✕</button></div>
+    <p>Guess the hidden five-letter word in six tries. Each guess must be five letters long. The colours tell you how close you are.</p>
+    <div class="example"><div class="example-tiles" aria-hidden="true"><span class="correct">P</span><span>L</span><span>A</span><span>N</span><span>T</span></div><div class="example-copy"><strong>P</strong> is in the word and in the right spot.</div></div>
+    <div class="example"><div class="example-tiles" aria-hidden="true"><span>C</span><span class="present">R</span><span>A</span><span>N</span><span>E</span></div><div class="example-copy"><strong>R</strong> is in the word but in a different spot.</div></div>
+    <div class="example"><div class="example-tiles" aria-hidden="true"><span>W</span><span>A</span><span class="absent">V</span><span>E</span><span>S</span></div><div class="example-copy"><strong>V</strong> is not in the word, or is an extra occurrence.</div></div>
+    <p><strong>A new puzzle is available every day.</strong> Or switch to Practice for unlimited rounds. Settings include hard mode and colour-blind friendly colours.</p>
+  </div>
+</dialog>
+<dialog id="settingsDialog" class="dialog" aria-labelledby="settingsTitle">
+  <div class="dialog-inner">
+    <div class="dialog-head"><h2 id="settingsTitle">Settings</h2><button type="button" class="icon-btn close" data-close aria-label="Close settings">✕</button></div>
+    <div class="setting"><div class="setting-copy"><strong>Hard mode</strong><span>Use all previously revealed hints. Enable before your first guess.</span></div><input type="checkbox" id="hardSetting" aria-label="Hard mode"></div>
+    <div class="setting"><div class="setting-copy"><strong>Colour-blind mode</strong><span>Orange and blue tiles with symbols for each match.</span></div><input type="checkbox" id="colourSetting" aria-label="Colour-blind mode"></div>
+    <div class="setting"><div class="setting-copy"><strong>Check dictionary</strong><span>Allow only recognised five-letter English words.</span></div><input type="checkbox" id="dictSetting" aria-label="Check dictionary"></div>
+    <div class="setting"><div class="setting-copy"><strong>Theme</strong><span>Choose an appearance or follow your device.</span></div><select id="themeSetting" aria-label="Theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
+    <div class="setting"><div class="setting-copy"><strong>Reduce motion</strong><span>Minimise flips, bounces and other animations.</span></div><input type="checkbox" id="motionSetting" aria-label="Reduce motion"></div>
+  </div>
+</dialog>
+<dialog id="statsDialog" class="dialog" aria-labelledby="statsTitle">
+  <div class="dialog-inner">
+    <div class="dialog-head"><h2 id="statsTitle">Statistics</h2><button type="button" class="icon-btn close" data-close aria-label="Close statistics">✕</button></div>
+    <div class="stats-grid" id="statsGrid"></div>
+    <h3>Guess distribution</h3><div id="distribution" aria-label="Guess distribution"></div>
+    <div id="resultNote" class="result-note"></div>
+    <button id="shareButton" type="button" class="share-btn">Share your grid ↗</button>
+  </div>
+</dialog>
+<script>
+'use strict';
+// ======================= DATA =======================
+const ANSWERS = [
+  "apple", "beach", "brain", "bread", "brush", "candy", "chair", "chalk", "charm", "chess",
+  "cloud", "clock", "coast", "crane", "dance", "dream", "drink", "earth", "eagle", "field",
+  "flame", "fruit", "ghost", "grape", "grass", "green", "heart", "honey", "house", "juice",
+  "knife", "lemon", "light", "magic", "maple", "music", "night", "ocean", "olive", "paint",
+  "peace", "piano", "pilot", "plant", "pride", "queen", "quiet", "river", "robot", "salad",
+  "scale", "shade", "share", "shine", "sleep", "smile", "snake", "spice", "storm", "sugar",
+  "sunny", "table", "tiger", "toast", "trade", "train", "trust", "uncle", "voice", "water",
+  "whale", "wheel", "world", "youth", "zebra", "alarm", "angel", "bacon", "badge", "baker",
+  "blade", "blaze", "bloom", "board", "brave", "brick", "cabin", "camel", "canal", "cargo",
+  "cedar", "chase", "cheek", "chief", "child", "climb", "coach", "coral", "cream", "crown",
+  "daisy", "delta", "diary", "dough", "drift", "drive", "early", "elbow", "fable", "faith",
+  "feast", "fence", "flash", "float", "floor", "flour", "focus", "frame", "fresh", "frost",
+  "giant", "glass", "globe", "glory", "grace", "grain", "guard", "guide", "happy", "hotel",
+  "ivory", "jelly", "jewel", "kayak", "laser", "laugh", "level", "linen", "lucky", "lunch",
+  "mango", "marsh", "medal", "mouse", "novel", "orbit", "pearl", "plaza", "pulse", "radio"
+];
+const VALID_GUESSES = [
+  "which", "there", "their", "would", "could", "after", "other", "about", "these", "those", "first", "where",
+  "under", "still", "being", "again", "began", "great", "asked", "while", "count", "whole", "shall", "right",
+  "place", "state", "every", "heard", "young", "never", "three", "years", "think", "round", "found", "blood",
+  "power", "might", "small", "quite", "large", "words", "hands", "cases", "among", "often", "taken", "known",
+  "along", "order", "women", "stood", "joint", "cause", "going", "given", "front", "white", "alone", "horse",
+  "later", "death", "labor", "money", "until", "woman", "nerve", "south", "wound", "thing", "leave", "above",
+  "added", "party", "parts", "enemy", "cried", "union", "petya", "bones", "since", "forms", "speak", "means",
+  "moved", "force", "third", "short", "times", "black", "clear", "ready", "north", "crowd", "tried", "point",
+  "close", "sound", "spoke", "occur", "lower", "least", "lymph", "local", "steps", "whose", "honor", "doing",
+  "usual", "civil", "paper", "court", "sides", "tears", "human", "acute", "hours", "reply", "bring", "mouth",
+  "faces", "ulcer", "takes", "doubt", "wrote", "terms", "drawn", "fixed", "smoke", "staff", "study", "group",
+  "heavy", "dress", "march", "seems", "veins", "lines", "story", "angry", "seven", "cells", "upper", "sight",
+  "eight", "loved", "lying", "mamma", "spite", "weeks", "below", "ought", "truth", "drove", "lived", "meant",
+  "shown", "event", "royal", "spent", "equal", "plain", "stage", "enter", "forty", "value", "aside", "thank",
+  "carry", "sense", "wrong", "knows", "issue", "flank", "fluid", "grown", "begun", "works", "avoid", "ranks",
+  "signs", "begin", "break", "cross", "fight", "rapid", "threw", "bound", "broke", "marry", "fifty", "gazed",
+  "hills", "today", "broad", "allow", "boots", "comes", "loose", "porch", "stand", "gives", "looks", "ebook",
+  "shock", "lodge", "rooms", "write", "apart", "plans", "reach", "twice", "carts", "sharp", "forth", "prove",
+  "chest", "favor", "goods", "grand", "press", "quick", "visit", "dying", "serfs", "suite", "slave", "towns",
+  "agree", "built", "sorry", "thick", "lands", "teeth", "bursa", "fever", "liked", "burst", "class", "trunk",
+  "devil", "facts", "stone", "touch", "walls", "alive", "blame", "bowed", "brown", "girls", "julie", "shaft",
+  "skull", "edges", "gauze", "nurse", "shook", "worth", "fully", "heads", "wrist", "limbs", "start", "cysts",
+  "final", "worse", "admit", "space", "stern", "false", "month", "notes", "serve", "ships", "views", "fatal",
+  "moist", "taxes", "texas", "cloak", "debts", "mixed", "shape", "stout", "clean", "crime", "empty", "piece",
+  "tibia", "fifth", "inner", "lives", "votes", "anger", "books", "rules", "ideas", "offer", "based", "merry",
+  "sinus", "badly", "habit", "knees", "armed", "banks", "makes", "faced", "murat", "serum", "aware", "bonds",
+  "gland", "legal", "raise", "weary", "layer", "moral", "saved", "sixth", "thumb", "trees", "urged", "watch",
+  "balls", "corps", "eager", "fancy", "fault", "midst", "print", "shirt", "shows", "smell", "wages", "grave",
+  "scene", "arose", "noble", "rates", "tends", "throw", "using", "cards", "delay", "doors", "grief", "owing",
+  "pfuel", "stamp", "yours", "catch", "hurry", "judge", "older", "price", "rough", "daily", "dense", "exist",
+  "proud", "roads", "valet", "ahead", "apply", "beard", "china", "claim", "needs", "ports", "sores", "color",
+  "pains", "saber", "sword", "areas", "cruel", "elson", "hopes", "knoll", "match", "naval", "shell", "shone",
+  "solid", "utter", "vital", "basis", "borne", "doesn", "elder", "liver", "newly", "pause", "tired", "coats",
+  "ended", "haven", "ilyin", "mills", "range", "thigh", "title", "vague", "wants", "angle", "bells", "cease",
+  "check", "cloth", "cover", "dirty", "fires", "gaily", "hoped", "learn", "lupus", "named", "noise", "paces",
+  "reign", "shoes", "swept", "trial", "wheat", "acted", "alike", "onset", "acres", "ankle", "dozen", "fired",
+  "grasp", "groin", "paced", "spoon", "stick", "trace", "unite", "worst", "yield", "farms", "homes", "limit",
+  "scars", "slept", "spine", "sweet", "total", "bills", "chose", "gates", "metal", "skill", "yards", "alien",
+  "april", "dared", "stock", "types", "brows", "drunk", "goose", "hence", "leads", "lined", "nails", "owner",
+  "plump", "shame", "spend", "tones", "track", "vilna", "virus", "cries", "feels", "seize", "speed", "stars",
+  "timid", "treat", "chain", "depth", "draft", "flung", "grows", "haste", "iliac", "maids", "proof", "risen",
+  "sixty", "steam", "steel", "swift", "tight", "urine", "awful", "calls", "dutch", "fetch", "groom", "heels",
+  "icons", "kinds", "lofty", "minor", "motor", "names", "outer", "sheet", "waved", "aloud", "arise", "birth",
+  "doses", "drops", "gross", "purse", "aorta", "bands", "clair", "funds", "kings", "lumen", "minds", "spare",
+  "teach", "tooth", "wagon", "beast", "bench", "dealt", "dried", "exact", "flesh", "irony", "lover", "mavra",
+  "route", "shots", "turns", "upset", "agent", "brief", "cadet", "clerk", "drank", "falls", "funny", "gouty",
+  "ideal", "naive", "naked", "porto", "scalp", "adult", "awake", "crops", "crush", "curly", "enjoy", "fleet",
+  "hoofs", "merit", "moves", "rises", "sheep", "smart", "stake", "vodka", "blind", "cords", "dimly", "fatty",
+  "finds", "frown", "index", "lungs", "neuro", "shout", "sorts", "spurs", "stain", "stump", "taste", "tense",
+  "waste", "ensue", "extra", "gloom", "harsh", "mines", "posts", "realm", "rigid", "shawl", "shops", "voted",
+  "woods", "bosom", "entry", "fears", "hated", "loves", "niece", "phase", "seats", "slope", "straw", "vexed",
+  "bleed", "cares", "crack", "fails", "gains", "loyal", "odour", "paine", "panic", "reins", "ruler", "stiff",
+  "stuck", "tells", "aimed", "avail", "awoke", "birch", "dined", "faint", "folly", "makar", "marks", "muddy",
+  "plate", "sadly", "sweat", "tenth", "toxic", "unity", "xviii", "adopt", "await", "baths", "bears", "clung",
+  "drain", "eaten", "error", "evils", "geese", "graft", "knock", "loses", "micro", "pages", "pupil", "recur",
+  "roofs", "solve", "style", "truly", "wiped", "aided", "aides", "alter", "boils", "build", "coman", "erect",
+  "guess", "guest", "latin", "males", "morel", "mount", "noted", "osteo", "owned", "paget", "petty", "plays",
+  "rests", "rings", "scent", "schon", "score", "skirt", "souls", "spasm", "tales", "tolly", "trail", "trick",
+  "truce", "tutor", "ulnar", "waist", "wider", "wrath", "wrung", "abuse", "adler", "blows", "boxes", "chill",
+  "clash", "dewey", "drugs", "dusty", "epoch", "fewer", "freed", "glove", "humor", "karay", "organ", "pglaf",
+  "pipes", "pitch", "quilt", "rider", "sweep", "waves", "wives", "altar", "birds", "blunt", "cheap", "cigar",
+  "couch", "craft", "folds", "fraud", "hairs", "mayor", "probe", "queer", "quest", "rival", "ruble", "saint",
+  "shoot", "split", "strip", "talks", "warts", "amuse", "block", "cared", "cough", "deeds", "flood", "guilt",
+  "hairy", "livid", "mustn", "patch", "renew", "rigor", "risks", "ruled", "salts", "santa", "shake", "songs",
+  "supra", "swung", "twist", "witty", "alert", "boone", "email", "frock", "iogel", "lakes", "links", "loans",
+  "lords", "manly", "milka", "model", "moran", "ounce", "silly", "swing", "tipsy", "tools", "toxin", "tubes",
+  "units", "vigor", "waged", "wills", "apron", "bliss", "blown", "brunn", "buren", "chart", "crash", "deity",
+  "doran", "dread", "elect", "fills", "flush", "forge", "gleam", "heals", "hints", "horns", "imply", "jokes",
+  "leash", "moore", "nasty", "prone", "rifle", "roots", "ruins", "ryder", "scarf", "shyly", "spots", "steep",
+  "store", "swear", "thief", "tramp", "tread", "ascii", "ashes", "avert", "belly", "bible", "boats", "bride",
+  "cents", "dowry", "drums", "enact", "exile", "grade", "groan", "hears", "keeps", "logic", "nosed", "opera",
+  "paste", "pinch", "poles", "prime", "psoas", "ratio", "rural", "screw", "shore", "snuff", "stair", "stoke",
+  "stuff", "token", "topic", "vivid", "writs", "yakov", "agony", "bites", "bless", "bored", "brisk", "bruit",
+  "cited", "clots", "cocci", "comet", "corns", "crazy", "crust", "cuban", "curls", "ducts", "eusol", "folks",
+  "girth", "idiot", "laden", "lasts", "loops", "misty", "naevi", "noisy", "ovary", "polls", "prize", "repay",
+  "ropes", "rumor", "sales", "santo", "satin", "spoil", "stark", "usage", "valid", "walks", "widow", "wings",
+  "worry", "ample", "backs", "beams", "blush", "booty", "bushy", "camps", "chere", "codes", "copse", "creak",
+  "crept", "curve", "dates", "ditch", "drown", "dusky", "dwelt", "envoy", "faded", "fists", "flora", "fools",
+  "greet", "knelt", "lathe", "leaps", "lists", "moles", "ninth", "nodes", "paths", "prior", "punch", "races",
+  "reads", "refer", "sable", "sabre", "salon", "shiny", "sites", "spell", "spies", "sting", "tents", "tower",
+  "tract", "valor", "actor", "ardor", "argue", "brass", "bulky", "burnt", "ceded", "chaos", "choir", "costs",
+  "cured", "dazed", "downy", "drill", "dwell", "ether", "exert", "faire", "ferry", "fiery", "files", "flags",
+  "flaps", "flies", "forts", "gases", "guise", "gully", "hague", "heirs", "hurts", "idaho", "lamps", "lapse",
+  "likes", "masha", "matas", "maybe", "melon", "miner", "myoma", "necks", "pairs", "piled", "rents", "roast",
+  "rouse", "rugay", "sends", "sheer", "shelf", "siege", "stein", "suits", "theme", "tough", "trend", "tying",
+  "undue", "vault", "verge", "verse", "villa", "weren", "whips", "winds", "xxiii", "alpha", "arena", "array",
+  "atone", "award", "basin", "beset", "blast", "boxer", "brook", "brute", "clubs", "cooee", "crawl", "crest",
+  "dozed", "drama", "fairy", "farcy", "fated", "games", "haiti", "hasty", "hayne", "hired", "holes", "hound",
+  "hullo", "image", "madly", "media", "mummy", "opens", "packs", "paler", "penny", "peril", "plait", "pleas",
+  "pound", "rails", "ranch", "ruddy", "safer", "scope", "seeds", "septa", "shako", "sober", "spark", "sport",
+  "staid", "stove", "swarm", "swore", "tendo", "tests", "texts", "trait", "tufts", "vogue", "wards", "warty",
+  "wight", "wiser", "abide", "adieu", "albus", "allay", "amiss", "bandy", "bared", "basic", "bazin", "bland",
+  "breed", "brood", "bwing", "carpi", "cette", "chaps", "chord", "click", "crisp", "crows", "curse", "daddy",
+  "dated", "finer", "flock", "flows", "fowls", "frail", "fused", "gifts", "gouge", "hangs", "homme", "hosts",
+  "locks", "lured", "mania", "merge", "moans", "noses", "palms", "panel", "piles", "pills", "ponds", "pouch",
+  "puffy", "rarer", "repel", "retro", "rides", "riots", "rocky", "samoa", "saxon", "scorn", "scrap", "shift",
+  "shove", "sighs", "slain", "sneer", "stael", "steal", "stony", "swamp", "swiss", "sworn", "tenor", "tinge",
+  "torch", "towel", "turks", "tweed", "urban", "valve", "whirl", "width", "wring", "abate", "album", "alley",
+  "aloof", "aptly", "atoms", "baked", "bases", "blank", "bluff", "boned", "bravo", "bryce", "bunch", "cakes",
+  "cheer", "clang", "coins", "comte", "crude", "decay", "deign", "delhi", "dryly", "dukes", "dwarf", "edged",
+  "elope", "ergot", "eylau", "femme", "filed", "flask", "fling", "flint", "forum", "franz", "gaunt", "genet",
+  "gerry", "glare", "grate", "handy", "helps", "holds", "hotly", "hyper", "ilium", "jerky", "jests", "junot",
+  "kiril", "ledge", "levee", "lurid", "mails", "manor", "meals", "milan", "mirth", "mitka", "moods", "motto",
+  "oaths", "ordre", "orsha", "palsy", "perry", "plane", "plots", "plows", "pools", "prank", "prick", "prose",
+  "puffs", "quand", "quill", "rainy", "react", "ridge", "rogue", "sacro", "seeks", "sheds", "sided", "sleek",
+  "slice", "slips", "smack", "snowy", "stabs", "stall", "stare", "stool", "stops", "strap", "swell", "taint",
+  "taper", "taxed", "tries", "unfit", "versa", "voila", "wharf", "whiff", "woven", "wreck", "yauza", "abyss",
+  "adept", "adore", "agile", "amply", "arrow", "bathe", "beads", "beats", "bergs", "beryl", "bleak", "blend",
+  "boast", "bolts", "bombs", "bowel", "bower", "brace", "brand", "brink", "canon", "cheat", "cling", "clump",
+  "comic", "cramp", "deals", "dries", "duchy", "dummy", "erupt", "exalt", "expel", "fines", "flail", "flirt",
+  "foods", "fossa", "genoa", "glade", "glued", "halls", "havoc", "heave", "hedge", "hobby", "ignat", "inert",
+  "items", "jolly", "klebs", "maker", "mates", "maxim", "milky", "mined", "morio", "morse", "mould", "overt",
+  "payne", "pence", "perch", "petit", "pints", "plank", "plume", "plums", "pobox", "quote", "rabid", "raged",
+  "rally", "reeds", "relay", "roans", "roses", "rupia", "rusty", "sacks", "sands", "sauce", "scaly", "scant",
+  "shays", "sings", "skins", "slack", "slide", "slums", "smash", "smelt", "smote", "snort", "soles", "speck",
+  "spray", "stale", "steer", "stowe", "stray", "super", "swabs", "tails", "taney", "tinel", "toils", "toned",
+  "tribe", "tuned", "twins", "ukase", "urate", "users", "vagus", "veldt", "ville", "vivat", "voter", "waltz",
+  "wears", "weigh", "weird", "wines", "wired", "worms", "wrnpc", "xxvii", "yells", "aback", "aches", "acrid",
+  "adapt", "adder", "adorn", "aglow", "amber", "amity", "armee", "aspen", "astir", "axiom", "barre", "barry",
+  "broom", "budge", "bully", "bweak", "cable", "cabot", "chale", "civic", "clamp", "clasp", "claws", "clink",
+  "clues", "combs", "comme", "cooks", "costo", "crate", "creek", "creep", "crile", "cubic", "cuffs", "cures",
+  "dares", "depot", "derma", "deuce", "digit", "discs", "dites", "divan", "docks", "drams", "dregs", "drone",
+  "droop", "equip", "ethyl", "evoke", "fangs", "films", "fined", "fleas", "flown", "foggy", "forgo", "fours",
+  "freak", "frill", "frola", "gaped", "germs", "giddy", "gowns", "grind", "grove", "gulch", "heaps", "herds",
+  "hides", "hoard", "husky", "infer", "joins", "joked", "keith", "kneel", "knots", "label", "latch", "lavra",
+  "lease", "leech", "lelya", "lends", "lever", "loads", "lobby", "meade", "meets", "merci", "meuse", "mitya",
+  "monks", "mound", "munro", "needn", "newer", "notre", "ossea", "ozheg", "panes", "paved", "peaks", "piety",
+  "plied", "pluck", "plush", "podgy", "poems", "poets", "poker", "query", "rakes", "razor", "relax", "relic",
+  "relit", "rocks", "salle", "sandy", "saute", "scabs", "scare", "scold", "seals", "sects", "sexes", "shave",
+  "shrug", "sicca", "silks", "sioux", "sized", "slate", "slung", "smite", "smock", "snout", "solar", "spear",
+  "spore", "squad", "stalk", "stole", "stoop", "stung", "surly", "synod", "tacit", "taras", "tasks", "tease",
+  "temps", "theft", "thwee", "tilde", "tokyo", "tonic", "tophi", "topsy", "trash", "tsars", "twigs", "uhlan",
+  "urope", "venom", "vocal", "vowed", "wager", "waked", "wares", "wedge", "abbey", "abode", "acorn", "agate",
+  "aisle", "alamo", "aline", "aloft", "alton", "amend", "amour", "annoy", "anoci", "apace", "ashen", "asset",
+  "azure", "baden", "baggy", "bales", "basal", "baser", "bated", "beget", "belts", "bends", "berth", "blink",
+  "boeuf", "boggy", "bonne", "bonus", "boost", "bosse", "bouts", "bowie", "bowls", "bragg", "brake", "bribe",
+  "bruin", "brunt", "bugle", "bulge", "burri", "buyer", "bwute", "byrom", "cabal", "cameo", "carlo", "carta",
+  "carte", "carve", "caste", "celui", "chasm", "chink", "choke", "chylo", "clips", "clown", "coils", "coley",
+  "colic", "comma", "crank", "creed", "croix", "cygne", "dairy", "dakin", "dandy", "daren", "debut", "defer",
+  "demon", "deter", "dingy", "dizzy", "dodge", "doers", "domes", "donor", "drags", "draws", "duels", "duroc"
+];
+const WORD_PATTERN = /^[a-z]{5}$/;
+const verifiedAnswers = [...new Set(ANSWERS.filter(w => WORD_PATTERN.test(w)))];
+const verifiedGuesses = [...new Set(VALID_GUESSES.filter(w => WORD_PATTERN.test(w)))];
+console.assert(verifiedAnswers.length === ANSWERS.length && ANSWERS.length === 150, 'Answer list must have 150 unique five-letter words');
+console.assert(verifiedGuesses.length === VALID_GUESSES.length && VALID_GUESSES.length >= 1500, 'Guess list must have 1500+ unique five-letter words');
+const WORDS = new Set([...verifiedAnswers, ...verifiedGuesses]);
+const STORAGE_KEY = 'wordgrid.offline.v1';
+const START_UTC = Date.UTC(2024, 0, 1);
+const CONGRATS = ['Genius', 'Magnificent', 'Impressive', 'Splendid', 'Great', 'Phew'];
+const STATUS_SCORE = {absent:1, present:2, correct:3};
+const KEY_ROWS = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
+const $ = selector => document.querySelector(selector);
+
+// ======================= SCORING =======================
+function scoreGuess(guess, answer) {
+  const results = Array(5).fill('absent');
+  const remaining = {};
+  for (const letter of answer) remaining[letter] = (remaining[letter] || 0) + 1;
+  for (let i = 0; i < 5; i++) {
+    if (guess[i] === answer[i]) { results[i] = 'correct'; remaining[guess[i]]--; }
+  }
+  for (let i = 0; i < 5; i++) {
+    if (results[i] === 'correct') continue;
+    if ((remaining[guess[i]] || 0) > 0) { results[i] = 'present'; remaining[guess[i]]--; }
+  }
+  return results;
+}
+function hardModeViolation(guess, rows) {
+  const requiredPositions = Array(5).fill(null);
+  const needed = {};
+  for (const row of rows) {
+    const counts = {};
+    for (let i = 0; i < 5; i++) {
+      if (row.statuses[i] === 'correct') requiredPositions[i] = row.guess[i];
+      if (row.statuses[i] !== 'absent') counts[row.guess[i]] = (counts[row.guess[i]] || 0) + 1;
+    }
+    for (const [letter, count] of Object.entries(counts)) needed[letter] = Math.max(needed[letter] || 0, count);
+  }
+  for (let i = 0; i < 5; i++) {
+    if (requiredPositions[i] && guess[i] !== requiredPositions[i]) {
+      const suffix = (i % 10 === 0 && i !== 10) ? 'st' : (i === 1 ? 'nd' : (i === 2 ? 'rd' : 'th'));
+      return `${i + 1}${suffix} letter must be ${requiredPositions[i].toUpperCase()}`;
+    }
+  }
+  for (const [letter, count] of Object.entries(needed)) {
+    const actual = [...guess].filter(ch => ch === letter).length;
+    if (actual < count) return count === 1 ? `Guess must contain ${letter.toUpperCase()}` : `Guess must contain ${count} ${letter.toUpperCase()}s`;
+  }
+  return null;
+}
+function selfTest() {
+  const tests = [
+    ['crane','eerie',['absent','absent','present','absent','correct']],
+    ['apple','apple',['correct','correct','correct','correct','correct']],
+    ['abcde','fghij',['absent','absent','absent','absent','absent']],
+    ['abbey','bobby',['present','absent','correct','absent','correct']],
+    ['cacao','civic',['correct','absent','absent','absent','present']],
+    ['eagle','allee',['present','present','absent','present','correct']],
+    ['array','rarer',['present','present','correct','absent','absent']],
+    ['level','leeee',['correct','correct','absent','correct','absent']],
+    ['cocoa','ooooo',['absent','correct','absent','correct','absent']],
+  ];
+  tests.forEach(([answer, guess, expected], idx) => {
+    console.assert(JSON.stringify(scoreGuess(guess, answer)) === JSON.stringify(expected), `Scoring test ${idx+1} failed`);
+  });
+  console.assert(hardModeViolation('abcde',[{guess:'crane',statuses:['correct','absent','present','absent','absent']}]) === '1st letter must be C', 'Hard-mode green test');
+  console.assert(hardModeViolation('climb',[{guess:'crane',statuses:['correct','absent','present','absent','absent']}]) === 'Guess must contain A', 'Hard-mode yellow test');
+  console.info('WordGrid scoring and hard-mode self-tests completed.');
+}
+if (location.hash === '#test') selfTest();
+function mulberry32(seed) { return function () { let t = (seed += 0x6D2B79F5); t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function shuffledAnswers() {
+  const words = verifiedAnswers.slice(), rand = mulberry32(20240601);
+  for(let i = words.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [words[i], words[j]] = [words[j], words[i]]; }
+  return words;
+}
+const DAILY_POOL = shuffledAnswers();
+function localDayInfo(date = new Date()) {
+  const year = date.getFullYear(), month = date.getMonth(), day = date.getDate();
+  const number = Math.round((Date.UTC(year, month, day) - START_UTC) / 86400000) + 1;
+  return { id: `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`, number, index: ((number - 1) % DAILY_POOL.length + DAILY_POOL.length) % DAILY_POOL.length };
+}
+function prevLocalDate(id) { const [y,m,d] = id.split('-').map(Number); const dt = new Date(y, m-1, d-1); return localDayInfo(dt).id; }
+function timeUntilMidnight() { const now=new Date(), next = new Date(now.getFullYear(),now.getMonth(),now.getDate()+1); const sec = Math.max(0,Math.ceil((next-now)/1000)); return [Math.floor(sec/3600),Math.floor(sec%3600/60),sec%60].map(n=>String(n).padStart(2,'0')).join(':'); }
+
+// ======================= STORAGE =======================
+let memoryStorage = {};
+function readSaved() {
+  try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : null; }
+  catch { return memoryStorage.state || null; }
+}
+function writeSaved(value) {
+  memoryStorage.state = value;
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(value)); } catch { /* Storage unavailable: memory fallback */ }
+}
+
+// ======================= STATE =======================
+const defaults = { hard:false, colourblind:false, dictionary:true, theme:'system', reduced:false };
+const blankStats = () => ({ played:0, wins:0, streak:0, maxStreak:0, distribution:[0,0,0,0,0,0], lastFinished:null, lastWon:null });
+const saved = readSaved() || {};
+let settings = {...defaults, ...(saved.settings || {})};
+if (!['system','light','dark'].includes(settings.theme)) settings.theme='system';
+let stats = { ...blankStats(), ...(saved.stats || {}) };
+if (!Array.isArray(stats.distribution) || stats.distribution.length !== 6) stats.distribution=[0,0,0,0,0,0];
+let seenHelp = saved.seenHelp === true;
+let mode = 'daily';
+let currentDay = localDayInfo();
+function newGame(gameMode, word, dateId = null) { return {mode:gameMode, answer:word, date:dateId, rows:[], input:'', finished:false, won:false, hardAtEnd:false}; }
+function validSavedDaily(entry) {
+  return entry && entry.date === currentDay.id && Array.isArray(entry.rows) && entry.rows.length <= 6 && entry.rows.every(r => WORD_PATTERN.test(r.guess) && Array.isArray(r.statuses) && r.statuses.length===5 && r.statuses.every(s => STATUS_SCORE[s])) && typeof entry.input === 'string' && /^[a-z]{0,5}$/.test(entry.input);
+}
+let dailyGame = validSavedDaily(saved.daily) ? {...saved.daily, mode:'daily', answer: DAILY_POOL[currentDay.index] } : newGame('daily',DAILY_POOL[currentDay.index],currentDay.id);
+let practiceGame = newGame('practice', randomPracticeWord());
+let game = dailyGame;
+let isBusy = false, toastTimer = null, finishedTimer = null, lastDialogOpener = null;
+function randomPracticeWord() {
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) { const a = new Uint32Array(1); crypto.getRandomValues(a); return verifiedAnswers[a[0] % verifiedAnswers.length]; }
+  return verifiedAnswers[Math.floor(Math.random()*verifiedAnswers.length)];
+}
+function persist() { writeSaved({ settings, stats, seenHelp, daily: dailyGame }); }
+
+// ======================= RENDER =======================
+function tileDescription(letter, status) {
+  if (!letter) return 'empty';
+  const label = status==='correct' ? 'correct' : status==='present' ? 'present in another position' : status==='absent' ? 'absent' : 'not yet checked';
+  return `${letter.toUpperCase()}, ${label}`;
+}
+function renderBoard() {
+  const board = $('#board'); board.replaceChildren();
+  for (let rowIndex=0; rowIndex<6; rowIndex++) {
+    const rowEl=document.createElement('div'); rowEl.className='board-row'; rowEl.setAttribute('role','row');
+    const committed=game.rows[rowIndex];
+    const letters=committed ? committed.guess : rowIndex===game.rows.length && !game.finished ? game.input : '';
+    for (let i=0; i<5; i++) {
+      const letter=letters[i] || '';
+      const status=committed ? committed.statuses[i] : null;
+      const tile=document.createElement('div'); tile.className='tile'; tile.setAttribute('role','gridcell');
+      if (letter && !status) tile.classList.add('typed');
+      if (status) tile.classList.add(status);
+      tile.setAttribute('aria-label',tileDescription(letter,status));
+      const text=document.createElement('span'); text.textContent=letter.toUpperCase(); tile.appendChild(text);
+      if (status && settings.colourblind && status!=='absent') { const badge=document.createElement('span'); badge.className='sym'; badge.setAttribute('aria-hidden','true'); badge.textContent=status==='correct'?'✓':'•'; tile.appendChild(badge); }
+      rowEl.appendChild(tile);
+    }
+    board.appendChild(rowEl);
+  }
+}
+function bestKeyboardColours() {
+  const best={};
+  for (const row of game.rows) {
+    row.guess.split('').forEach((ch,i)=>{ const st=row.statuses[i]; if (!best[ch] || STATUS_SCORE[st]>STATUS_SCORE[best[ch]]) best[ch]=st; });
+  }
+  return best;
+}
+function renderKeyboard() {
+  const keyboard=$('#keyboard'), best=bestKeyboardColours(); keyboard.replaceChildren();
+  KEY_ROWS.forEach((letters,rowIndex)=>{
+    const row=document.createElement('div'); row.className='key-row';
+    const names=rowIndex===2?['ENTER',...letters,'BACKSPACE']:letters.split('');
+    for(const name of names) {
+      const key=document.createElement('button'); key.type='button'; key.className='key';
+      if (name==='ENTER'||name==='BACKSPACE') key.classList.add('wide');
+      const state=best[name.toLowerCase()];
+      if(state) key.classList.add(state);
+      key.setAttribute('aria-label',name==='ENTER'?'Enter':name==='BACKSPACE'?'Backspace':`${name.toLowerCase()}${state?', '+tileDescription(name.toLowerCase(),state).split(', ')[1]:''}`);
+      key.textContent=name==='BACKSPACE'?'⌫':name==='ENTER'?'ENTER':name;
+      if (settings.colourblind && state && state!=='absent') { const s=document.createElement('span'); s.className='key-symbol'; s.textContent=state==='correct'?'✓':'•'; s.setAttribute('aria-hidden','true'); key.appendChild(s); }
+      key.addEventListener('click',()=>acceptKey(name)); row.appendChild(key);
+    }
+    keyboard.appendChild(row);
+  });
+}
+function renderMode() {
+  $('#dailyButton').classList.toggle('active',mode==='daily');
+  $('#practiceButton').classList.toggle('active',mode==='practice');
+  $('#dailyButton').setAttribute('aria-pressed',String(mode==='daily'));
+  $('#practiceButton').setAttribute('aria-pressed',String(mode==='practice'));
+  $('#modeHeading').textContent=mode==='daily'?`Daily puzzle #${currentDay.number}`:'Unlimited practice';
+  $('#subheading').innerHTML=mode==='daily'?'Six guesses. <strong>One word a day.</strong>':'Play freely. <strong>No streak pressure.</strong>';
+  const bottom=$('#bottomBar'); bottom.replaceChildren();
+  if(mode==='practice') {
+    const b=document.createElement('button'); b.className='pill-btn'; b.type='button'; b.textContent='↻ New practice game'; b.addEventListener('click',newPractice); bottom.appendChild(b);
+  } else if(game.finished) {
+    const s=document.createElement('span'); s.className='next-note'; s.id='countdown'; s.textContent=`Next puzzle in ${timeUntilMidnight()}`; bottom.appendChild(s);
+  } else {
+    const s=document.createElement('span'); s.className='next-note'; s.textContent='One fresh challenge every day'; bottom.appendChild(s);
+  }
+}
+function applySettings() {
+  if(settings.theme==='system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme=settings.theme;
+  document.documentElement.dataset.colorblind=String(settings.colourblind);
+  document.documentElement.dataset.reduced=String(settings.reduced);
+  $('#hardSetting').checked=settings.hard;
+  $('#colourSetting').checked=settings.colourblind;
+  $('#dictSetting').checked=settings.dictionary;
+  $('#themeSetting').value=settings.theme;
+  $('#motionSetting').checked=settings.reduced;
+}
+function renderAll() { applySettings(); renderMode(); renderBoard(); renderKeyboard(); }
+function showToast(message, sticky=false) {
+  const toast=$('#toast'); clearTimeout(toastTimer); toast.textContent=message; toast.classList.add('show'); toast.setAttribute('aria-hidden','false');
+  $('#announcer').textContent=message;
+  if(!sticky) toastTimer=setTimeout(()=>{toast.classList.remove('show');toast.setAttribute('aria-hidden','true');},2400);
+}
+function clearToast() { clearTimeout(toastTimer); $('#toast').classList.remove('show'); $('#toast').setAttribute('aria-hidden','true'); }
+
+// ======================= ANIMATION =======================
+function invalidGuess(message) {
+  showToast(message);
+  const row=$('#board').children[game.rows.length]; if(!row) return;
+  row.classList.remove('shake'); void row.offsetWidth; row.classList.add('shake');
+  row.addEventListener('animationend',()=>row.classList.remove('shake'),{once:true});
+}
+function animateReveal(rowNumber, statuses, onComplete) {
+  const reduce=settings.reduced || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(reduce) { renderBoard(); renderKeyboard(); onComplete(); return; }
+  const rowEl=$('#board').children[rowNumber];
+  if(!rowEl) { renderBoard(); renderKeyboard(); onComplete(); return; }
+  const delay=240, duration=540;
+  statuses.forEach((status,i)=>{
+    const tile=rowEl.children[i];
+    setTimeout(()=>{ tile.classList.add('flip'); },i*delay);
+    setTimeout(()=>{
+      tile.classList.add(status); tile.classList.remove('typed');
+      tile.setAttribute('aria-label',tileDescription(game.rows[rowNumber].guess[i],status));
+      if(settings.colourblind && status!=='absent') { const marker=document.createElement('span'); marker.className='sym'; marker.textContent=status==='correct'?'✓':'•'; marker.setAttribute('aria-hidden','true'); tile.appendChild(marker); }
+    },i*delay+duration/2);
+  });
+  setTimeout(()=>{ renderBoard(); renderKeyboard(); onComplete(); },4*delay+duration+40);
+}
+
+// ======================= INPUT =======================
+function acceptKey(key) {
+  if(isBusy || anyDialogOpen() || game.finished) return;
+  if(key==='ENTER') return submitGuess();
+  if(key==='BACKSPACE') { if(game.input) { game.input=game.input.slice(0,-1); renderBoard(); if(mode==='daily') persist(); } return; }
+  if(/^[A-Z]$/.test(key) && game.input.length<5) {
+    game.input+=key.toLowerCase(); renderBoard();
+    const row=$('#board').children[game.rows.length]; const tile=row?.children[game.input.length-1];
+    if(tile && !settings.reduced) { tile.classList.add('pop'); tile.addEventListener('animationend',()=>tile.classList.remove('pop'),{once:true}); }
+    if(mode==='daily') persist();
+  }
+}
+function submitGuess() {
+  if(game.input.length!==5) return invalidGuess('Not enough letters');
+  const guess=game.input;
+  if(settings.dictionary && !WORDS.has(guess)) return invalidGuess('Not in word list');
+  const violation=settings.hard?hardModeViolation(guess,game.rows):null;
+  if(violation) return invalidGuess(violation);
+  const statuses=scoreGuess(guess,game.answer), rowNumber=game.rows.length;
+  game.rows.push({guess,statuses}); game.input=''; isBusy=true;
+  if(mode==='daily') persist();
+  animateReveal(rowNumber,statuses,()=>{
+    isBusy=false;
+    const won=guess===game.answer, lost=game.rows.length===6 && !won;
+    if(won||lost) finishGame(won,rowNumber);
+  });
+}
+function finishGame(won,lastRow) {
+  game.finished=true; game.won=won; game.hardAtEnd=settings.hard;
+  if(mode==='daily') {
+    stats.played++;
+    stats.lastFinished=currentDay.id;
+    if(won) {
+      stats.wins++; stats.distribution[lastRow]++;
+      stats.streak=(stats.lastWon===prevLocalDate(currentDay.id))?stats.streak+1:1;
+      stats.maxStreak=Math.max(stats.maxStreak,stats.streak);
+      stats.lastWon=currentDay.id;
+    } else stats.streak=0;
+    dailyGame=game;
+    persist();
+  }
+  renderMode();
+  if(won) {
+    const rowEl=$('#board').children[lastRow]; if(rowEl&&!settings.reduced) rowEl.classList.add('bounce');
+    showToast(CONGRATS[lastRow]);
+  } else showToast(`The word was ${game.answer.toUpperCase()}`,true);
+  clearTimeout(finishedTimer);
+  finishedTimer=setTimeout(()=>openDialog('#statsDialog', $('#statsButton')),won?1500:1700);
+}
+function onPhysicalKey(event) {
+  if(event.ctrlKey||event.altKey||event.metaKey||anyDialogOpen()) return;
+  const t=event.target;
+  if(t && (t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.tagName==='SELECT'||t.isContentEditable)) return;
+  const key=event.key==='Enter'?'ENTER':event.key==='Backspace'?'BACKSPACE':/^[a-z]$/i.test(event.key)?event.key.toUpperCase():null;
+  if(key) { event.preventDefault(); acceptKey(key); }
+}
+
+// ======================= MODES =======================
+function setMode(next) {
+  if(next===mode || isBusy) return;
+  clearTimeout(finishedTimer); clearToast();
+  mode=next; game=next==='daily'?dailyGame:practiceGame; renderAll();
+  if(mode==='daily'&&game.finished) setTimeout(()=>openDialog('#statsDialog', $('#statsButton')),350);
+}
+function newPractice() {
+  if(isBusy || mode!=='practice') return;
+  clearTimeout(finishedTimer); clearToast(); practiceGame=newGame('practice',randomPracticeWord()); game=practiceGame; renderAll();
+}
+function midnightCheck() {
+  const day=localDayInfo();
+  if(day.id!==currentDay.id) {
+    currentDay=day;
+    dailyGame=newGame('daily',DAILY_POOL[day.index],day.id);
+    if(mode==='daily') { game=dailyGame; isBusy=false; clearTimeout(finishedTimer); clearToast(); renderAll(); showToast('A new daily puzzle is ready!'); }
+    persist();
+  }
+  const countdown=$('#countdown'); if(countdown) countdown.textContent=`Next puzzle in ${timeUntilMidnight()}`;
+}
+
+// ======================= STATS =======================
+function emojiGrid() {
+  const number=currentDay.number;
+  const tries=game.won?game.rows.length:'X';
+  const hardSuffix=game.hardAtEnd?'*':'';
+  const palette=settings.colourblind?{correct:'🟧',present:'🟦',absent:'⬛'}:{correct:'🟩',present:'🟨',absent:'⬛'};
+  return [`WordGrid #${number} ${tries}/6${hardSuffix}`,...game.rows.map(row=>row.statuses.map(x=>palette[x]).join(''))].join('\n');
+}
+function renderStats() {
+  const cells=[['Played',stats.played],['Win %',stats.played?`${Math.round(stats.wins/stats.played*100)}%`:'0%'],['Current streak',stats.streak],['Max streak',stats.maxStreak]];
+  const grid=$('#statsGrid'); grid.replaceChildren();
+  for(const [caption,val] of cells){ const cell=document.createElement('div'); cell.className='stats-cell'; const num=document.createElement('div'); num.className='stats-num'; num.textContent=String(val); const label=document.createElement('div'); label.className='stats-caption'; label.textContent=caption; cell.append(num,label); grid.appendChild(cell); }
+  const distribution=$('#distribution'); distribution.replaceChildren();
+  const max=Math.max(1,...stats.distribution);
+  stats.distribution.forEach((count,index)=>{
+    const r=document.createElement('div'); r.className='dist-row'; const n=document.createElement('span'); n.className='dist-n'; n.textContent=String(index+1);
+    const bar=document.createElement('div'); bar.className='dist-bar';
+    bar.style.width=`${Math.max(8,Math.round(count/max*100))}%`;
+    const latest=mode==='daily'&&game.finished&&game.won&&game.rows.length===index+1;
+    if(latest) bar.classList.add('highlight');
+    bar.textContent=String(count); bar.setAttribute('aria-label',`${count} daily wins in ${index+1} guesses`);
+    r.append(n,bar); distribution.appendChild(r);
+  });
+  const note=$('#resultNote');
+  note.textContent=mode==='practice'?'Practice games do not affect your daily statistics.':game.finished?(game.won?`Daily challenge solved in ${game.rows.length} ${game.rows.length===1?'guess':'guesses'}.`:`Today's answer: ${game.answer.toUpperCase()}`):'Finish today’s challenge to add to your daily statistics.';
+  $('#shareButton').disabled=mode!=='daily'||!game.finished;
+}
+async function shareResult() {
+  if(mode!=='daily'||!game.finished) return;
+  const text=emojiGrid(); let copied=false;
+  try { if(navigator.clipboard?.writeText) {await navigator.clipboard.writeText(text); copied=true;} } catch { /* fallback */ }
+  if(!copied) {
+    const el=document.createElement('textarea'); el.value=text; el.setAttribute('aria-hidden','true'); el.style.cssText='position:fixed;left:-9999px;opacity:0'; document.body.appendChild(el); el.select();
+    try { copied=document.execCommand('copy'); } catch { copied=false; }
+    el.remove();
+  }
+  showToast(copied?'Copied to clipboard':'Copy unavailable on this browser');
+}
+
+// ======================= SETTINGS =======================
+function bindSettings() {
+  $('#hardSetting').addEventListener('change',event=>{
+    if(event.target.checked && game.rows.length>0) { event.target.checked=settings.hard; showToast('Hard mode can only be enabled at the start of a round'); return; }
+    settings.hard=event.target.checked; persist();
+  });
+  $('#colourSetting').addEventListener('change',event=>{ settings.colourblind=event.target.checked; applySettings(); renderBoard(); renderKeyboard(); persist(); });
+  $('#dictSetting').addEventListener('change',event=>{ settings.dictionary=event.target.checked; persist(); });
+  $('#themeSetting').addEventListener('change',event=>{ settings.theme=event.target.value; applySettings(); persist(); });
+  $('#motionSetting').addEventListener('change',event=>{ settings.reduced=event.target.checked; applySettings(); persist(); });
+}
+
+// ======================= INIT =======================
+function anyDialogOpen(){return [...document.querySelectorAll('dialog')].some(d=>d.open);}
+function openDialog(selector, opener) {
+  const dialog=$(selector); if(anyDialogOpen()) return;
+  lastDialogOpener=opener||document.activeElement;
+  if(selector==='#statsDialog') renderStats();
+  if(selector==='#settingsDialog') applySettings();
+  dialog.showModal(); dialog.querySelector('[data-close]')?.focus();
+}
+function setupDialogs() {
+  document.querySelectorAll('[data-close]').forEach(btn=>btn.addEventListener('click',()=>btn.closest('dialog').close()));
+  document.querySelectorAll('dialog').forEach(dialog=>{
+    dialog.addEventListener('close',()=>{ if(lastDialogOpener&&lastDialogOpener.isConnected)lastDialogOpener.focus();lastDialogOpener=null; });
+    dialog.addEventListener('click',event=>{ if(event.target===dialog) dialog.close(); });
+  });
+  $('#helpButton').addEventListener('click',()=>openDialog('#helpDialog',$('#helpButton')));
+  $('#statsButton').addEventListener('click',()=>openDialog('#statsDialog',$('#statsButton')));
+  $('#settingsButton').addEventListener('click',()=>openDialog('#settingsDialog',$('#settingsButton')));
+  $('#shareButton').addEventListener('click',shareResult);
+}
+function init() {
+  applySettings(); renderAll(); bindSettings(); setupDialogs();
+  $('#dailyButton').addEventListener('click',()=>setMode('daily'));
+  $('#practiceButton').addEventListener('click',()=>setMode('practice'));
+  document.addEventListener('keydown',onPhysicalKey);
+  setInterval(midnightCheck,1000);
+  if(!seenHelp) {
+    seenHelp=true; persist();
+    requestAnimationFrame(()=>openDialog('#helpDialog',$('#helpButton')));
+  } else if(game.finished) requestAnimationFrame(()=>openDialog('#statsDialog',$('#statsButton')));
+}
+init();
+</script>
+</body>
+</html>
